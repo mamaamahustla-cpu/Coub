@@ -12,142 +12,122 @@ from aiogram.client.default import DefaultBotProperties
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Токен бота (ЗАМЕНИ НА СВОЙ!)
-TOKEN = "8713010196:AAFrSa5-dUpuSF5qfxo7v_56JOuy8QHiH6M"
+# Токен бота (ЗАМЕНИ НА СВОЙ НОВЫЙ! Старый конфликтует)
+TOKEN = "8713010196:AAF-JiZfrvW0zLYTsVhPTKJFlwUIzi7hA2k"
 
 # Создаем экземпляры бота и диспетчера
 bot = Bot(
     token=TOKEN,
-    default=DefaultBotProperties(parse_mode=ParseMode.MARKDOWN)
+    default=DefaultBotProperties(parse_mode=ParseMode.HTML)  # ← ВАЖНО:改用 HTML
 )
 dp = Dispatcher()
-
-# Регулярное выражение для разных форматов
-ROLL_PATTERN = r'^/roll\s*(?:(\d+))?d(\d+)(?:\+(\d+))?$'
 
 @dp.message(Command("start", "help"))
 async def cmd_start_help(message: Message):
     """Обработчик команд /start и /help"""
     help_text = (
-        "🎲 *Dice Roller Bot*\n\n"
-        "Я помогаю бросать кубики в групповых чатах!\n\n"
-        "*Доступные команды:*\n"
-        "• `/roll dN` - бросить N-гранный кубик\n"
-        "• `/roll XdN` - бросить X кубиков по N граней\n"
-        "• `/roll dN+M` - бросить кубик с бонусом +M\n"
-        "• `/roll XdN+M` - бросить X кубиков с бонусом\n\n"
-        "*Примеры:*\n"
-        "• `/roll d20`\n"
-        "• `/roll 2d6`\n"
-        "• `/roll d100+10`"
+        "🎲 <b>Dice Roller Bot</b>\n\n"
+        "Я помогаю бросать кубики!\n\n"
+        "<b>Команды:</b>\n"
+        "• /roll d20 - один кубик\n"
+        "• /roll 2d6 - два кубика\n"
+        "• /roll d100+10 - с бонусом\n\n"
+        "<b>Пример:</b> /roll d20"
     )
-    await message.reply(help_text)
+    await message.reply(help_text, parse_mode=ParseMode.HTML)
 
 @dp.message(Command("roll"))
 async def cmd_roll(message: Message):
     """
-    УПРОЩЕННЫЙ обработчик команды /roll
+    Упрощенный обработчик /roll
     """
-    # Получаем полный текст сообщения
-    full_text = message.text.strip()
-    logger.info(f"Получена команда: {full_text}")
-    
-    # Просто проверяем, что после /roll что-то есть
-    parts = full_text.split(maxsplit=1)
+    # Получаем текст после команды
+    text = message.text.strip()
+    parts = text.split(maxsplit=1)
     
     if len(parts) < 2:
         await message.reply(
-            "❌ Не указан кубик!\n"
-            "Используйте: `/roll d20` или `/roll 2d6+3`",
-            parse_mode=ParseMode.MARKDOWN
+            "❌ Напиши: /roll d20\n"
+            "Примеры: /roll 2d6, /roll d100+10"
         )
         return
     
-    # Получаем аргумент (то, что после /roll)
     roll_arg = parts[1].strip().lower()
-    logger.info(f"Аргумент: {roll_arg}")
+    logger.info(f"Бросок: {roll_arg}")
     
-    # Проверяем базовый формат: должно содержать 'd' и цифры
-    if 'd' not in roll_arg:
-        await message.reply(
-            "❌ Неправильный формат! Должно быть что-то типа `d20`",
-            parse_mode=ParseMode.MARKDOWN
-        )
-        return
+    # Убираем лишние пробелы
+    roll_arg = roll_arg.replace(" ", "")
     
-    # Разбираем формат
-    # Вариант 1: просто d20
-    if re.match(r'^d\d+$', roll_arg):
-        sides = int(roll_arg[1:])
-        num_dice = 1
-        bonus = 0
-    
-    # Вариант 2: 2d20
-    elif re.match(r'^\d+d\d+$', roll_arg):
-        num_dice, sides = map(int, roll_arg.split('d'))
-        bonus = 0
-    
-    # Вариант 3: d20+5
-    elif re.match(r'^d\d+\+\d+$', roll_arg):
-        dice_part, bonus = roll_arg.split('+')
-        sides = int(dice_part[1:])
-        num_dice = 1
-        bonus = int(bonus)
-    
-    # Вариант 4: 2d20+3
-    elif re.match(r'^\d+d\d+\+\d+$', roll_arg):
-        dice_part, bonus = roll_arg.split('+')
-        num_dice, sides = map(int, dice_part.split('d'))
-        bonus = int(bonus)
-    
-    else:
-        await message.reply(
-            "❌ Не могу распознать формат. Попробуй:\n"
-            "• `/roll d20`\n"
-            "• `/roll 2d6`\n"
-            "• `/roll d100+10`",
-            parse_mode=ParseMode.MARKDOWN
-        )
-        return
-    
-    # Проверки
-    if num_dice > 100:
-        await message.reply("❌ Слишком много кубиков! Максимум 100")
-        return
-    
-    if sides > 1000000:
-        await message.reply("❌ Слишком большое число граней!")
-        return
-    
-    # Бросаем кубики
-    results = [random.randint(1, sides) for _ in range(num_dice)]
-    total = sum(results) + bonus
-    
-    # Формируем ответ
-    user = message.from_user
-    user_name = f"@{user.username}" if user.username else user.full_name
-    
-    if num_dice == 1 and bonus == 0:
-        response = f"🎲 *d{sides}*\n👤 {user_name}\n✨ **{results[0]}**"
-    elif num_dice == 1 and bonus > 0:
-        response = f"🎲 *d{sides}+{bonus}*\n👤 {user_name}\n✨ {results[0]} + {bonus} = **{total}**"
-    elif num_dice > 1 and bonus == 0:
-        dice_str = " + ".join(map(str, results))
-        response = f"🎲 *{num_dice}d{sides}*\n👤 {user_name}\n📊 {dice_str}\n📈 **{total}**"
-    else:
-        dice_str = " + ".join(map(str, results))
-        response = f"🎲 *{num_dice}d{sides}+{bonus}*\n👤 {user_name}\n📊 {dice_str}\n📈 Сумма: {total - bonus} + {bonus} = **{total}**"
-    
-    await message.reply(response)
+    # Простейший парсинг
+    try:
+        # Проверяем формат d20
+        if roll_arg.startswith('d') and '+' not in roll_arg:
+            sides = int(roll_arg[1:])
+            result = random.randint(1, sides)
+            await message.reply(f"🎲 <b>d{sides}:</b> {result}")
+            
+        # Проверяем формат 2d20
+        elif 'd' in roll_arg and '+' not in roll_arg:
+            num, sides = map(int, roll_arg.split('d'))
+            if num > 10:
+                await message.reply("❌ Слишком много кубиков (макс 10)")
+                return
+            results = [random.randint(1, sides) for _ in range(num)]
+            total = sum(results)
+            results_str = " + ".join(map(str, results))
+            await message.reply(
+                f"🎲 <b>{num}d{sides}:</b>\n"
+                f"{results_str} = <b>{total}</b>"
+            )
+            
+        # Проверяем формат d20+5
+        elif roll_arg.startswith('d') and '+' in roll_arg:
+            dice_part, bonus = roll_arg.split('+')
+            sides = int(dice_part[1:])
+            bonus = int(bonus)
+            result = random.randint(1, sides)
+            total = result + bonus
+            await message.reply(
+                f"🎲 <b>d{sides}+{bonus}:</b>\n"
+                f"{result} + {bonus} = <b>{total}</b>"
+            )
+            
+        # Проверяем формат 2d20+3
+        elif 'd' in roll_arg and '+' in roll_arg:
+            dice_part, bonus = roll_arg.split('+')
+            num, sides = map(int, dice_part.split('d'))
+            bonus = int(bonus)
+            if num > 10:
+                await message.reply("❌ Слишком много кубиков (макс 10)")
+                return
+            results = [random.randint(1, sides) for _ in range(num)]
+            total = sum(results) + bonus
+            results_str = " + ".join(map(str, results))
+            await message.reply(
+                f"🎲 <b>{num}d{sides}+{bonus}:</b>\n"
+                f"{results_str} + {bonus} = <b>{total}</b>"
+            )
+            
+        else:
+            await message.reply("❌ Непонятный формат. Пиши /roll d20")
+            
+    except ValueError:
+        await message.reply("❌ Ошибка в числах. Пример: /roll d20")
+    except Exception as e:
+        logger.error(f"Ошибка: {e}")
+        await message.reply("❌ Что-то пошло не так")
 
 @dp.message()
-async def handle_other(message: Message):
-    """Игнорируем остальные сообщения"""
+async def ignore_all(message: Message):
+    """Игнорируем всё кроме команд"""
     pass
 
 async def main():
-    logger.info("Бот запущен!")
+    logger.info("🚀 Бот запущен!")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("👋 Бот остановлен")
